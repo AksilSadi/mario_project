@@ -65,3 +65,4 @@ export const collisionGoomba=(perso:any,goomba:any,cameraX:number)=>{
         marioTop >= goomba.y && marioTop <= goombaBottom
     ) 
 }
+

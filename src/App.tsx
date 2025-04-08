@@ -1,10 +1,11 @@
 import { useRef, useEffect, useState } from 'react';
 import Tiles from './images/tiles.png'
-import { tileSize, worldData } from "./models/conf";
-import { generateMatrix } from './models/world';
+import { tileSize, worldData,SCALE,BASE_TILE_SIZE } from "./models/conf";
+import { mat,getPosition } from './models/world';
 import {CollisionX,CollisionY,ecraser,collisionGoomba} from './models/collision'
 import characters from './images/characters.gif'
 import mouvements from './models/marioMouvements'
+import {astar} from './models/pathfinding'
 
 const CanvasGame = () => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -24,6 +25,7 @@ const CanvasGame = () => {
     dy: number;
     w: number;
     h: number;
+    Maxspeed:number
     gravity: number;
     forceSaut: number;
     sauter: boolean;
@@ -49,8 +51,31 @@ const CanvasGame = () => {
     frameIndex:number;
     frameCounter:number;
     FRAME_SPEED:number;
-
   };
+  type noeud= {
+    x: number;
+    y: number;
+    g: number; 
+    h: number; 
+    f: number; 
+    parent: noeud | null; 
+}
+  type IAennemi = {
+    x: number; 
+    y: number;
+    dx: number;
+    dy: number;
+    w: number;
+    h: number;
+    gravity: number;
+    etat: 'marcher' | 'ecraser';
+    path: noeud[];
+    currentTargetIndex: number;
+    image: HTMLImageElement;
+    frameIndex:number;
+    frameCounter:number;
+    FRAME_SPEED:number;
+};
   type size = {
     width: number;
     height: number;
@@ -61,13 +86,15 @@ const CanvasGame = () => {
     size?: size;
     endOfGame: boolean;
     ennemis:Ennemi[]
+    intelligent:IAennemi
     /*ennemi: Ennemi;*/
   };
 
   const StateRef = useRef<Etat>({
-    personnage: { x: 0, y: 0, dx: 0, dy: 0, gravity: 0, forceSaut: 0, w: 0, h: 0, sauter: true, direction: 'right', etat: "stopD", image: new Image(),frameIndex:0,frameCounter:0,FRAME_SPEED:12 },
+    personnage: { x: 0, y: 0, dx: 0, dy: 0, gravity: 0, forceSaut: 0, w: 0, h: 0,Maxspeed:0, sauter: true, direction: 'right', etat: "stopD", image: new Image(),frameIndex:0,frameCounter:0,FRAME_SPEED:12 },
     endOfGame: false,
-    ennemis:[]
+    ennemis:[],
+   intelligent: { x: 0, y: 0, dx: 0, dy: 0, gravity: 0, w: 0, h: 0,etat: 'marcher', path: [], currentTargetIndex: 0,image:new Image(),frameIndex:0,frameCounter:0,FRAME_SPEED:20 } 
     });
 
   const initialisation = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
@@ -82,45 +109,73 @@ const CanvasGame = () => {
       y: 50,
       dx: 0,
       dy: 0,
-      w:14,
-      h:16,
-      gravity: 0.3,
-      forceSaut: -8,
+      w:14*SCALE,
+      h:16*SCALE,
+      gravity: 0.3*SCALE,
+      forceSaut: -8*SCALE,
       sauter: true,
       direction: 'right',
       etat:'stopD',
       image:img,
       frameIndex:0,
       frameCounter:0,
-      FRAME_SPEED:4
+      FRAME_SPEED:6,
+      Maxspeed:3*SCALE
 
     },
       endOfGame:false,
       ennemis:[
-        { x: 200, y: 100, dx: -1, dy: 0, w: 16, h: 16, gravity: 0.3, direction: 'left', etat: 'marcher',image:img,frameIndex:0,frameCounter:0,FRAME_SPEED:20 },
-        { x: 400, y: 100, dx: 1, dy: 0, w: 16, h: 16, gravity: 0.3, direction: 'right', etat: 'marcher',image:img,frameIndex:0,frameCounter:0,FRAME_SPEED:20 }
-      ]
+        { x: 200, y: 100, dx: -1*SCALE, dy: 0, w: 16*SCALE, h: 16*SCALE, gravity: 0.3*SCALE, direction: 'left', etat: 'marcher',image:img,frameIndex:0,frameCounter:0,FRAME_SPEED:20 },
+        { x: 400, y: 100, dx: 1*SCALE, dy: 0, w: 16*SCALE, h: 16*SCALE, gravity: 0.3*SCALE, direction: 'right', etat: 'marcher',image:img,frameIndex:0,frameCounter:0,FRAME_SPEED:20 }
+      ],
+      intelligent: { x: 1000, y: (height-(tileSize*2))-8, dx: 0, dy: 0, w: 16*SCALE, h: 16*SCALE, gravity: 0.3*SCALE,etat: 'marcher', path: [], currentTargetIndex: 0,image:img,frameIndex:0,frameCounter:0,FRAME_SPEED:20 } 
     }
     drawBackground(ctx);
    
   };
 
+  const generatepath=(sourceX:number,sourceY:number,cibleX:number,cibleY:number,ennemi:IAennemi)=>{
+    const noeudSource:noeud={
+      x: getPosition(sourceX),
+      y: getPosition(sourceY),
+      g: 0, h: 0, f: 0, parent: null
+    }
+    const noeudCible:noeud={
+      x: getPosition(cibleX),
+      y: getPosition(cibleY),
+      g: 0, h: 0, f: 0, parent: null
+  }
+  const path =astar(noeudSource,noeudCible);
+  ennemi.path=path;
+  return ennemi;
+}
+
+
   const update = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     let { personnage,ennemis } = StateRef.current;
-  
-    // reinitialiser la vitesse du mario
-    personnage.dx = 0;
+    personnage.dx *= 0.95;
+    if (Math.abs(personnage.dx) < 0.1) {
+      personnage.dx = 0;
+    }
+    
     personnage.dy += personnage.gravity;
     if(personnage.etat!=='mort'){
       if (keysPressed.current['ArrowRight']) {
         if (personnage.x >= canvas.width / 2 && cameraOffset.current < worldData.backgrounds[0].ranges[0][1] * tileSize - canvas.width) {
           // Déplacement de la caméra et Mario reste à sa position dans le monde
-          cameraOffset.current += 3;
+          cameraOffset.current += 2*SCALE;
         } else {
           // mario avance normalement, et la camera ne bouge pas
-          personnage.dx = 3;
+          if (personnage.dx < 0) {
+            // Si on allait à gauche → freinage
+            personnage.dx += 0.3; // va vers 0
+          }else{
+            personnage.dx += 0.3;
+           if (personnage.dx > personnage.Maxspeed) personnage.dx = personnage.Maxspeed;
+          }
+          
         }
         
         personnage.frameCounter++;
@@ -132,10 +187,16 @@ const CanvasGame = () => {
       } else if (keysPressed.current['ArrowLeft']) {
         if (cameraOffset.current > 0 && personnage.x <= canvas.width / 2) {
           // Déplacement de la caméra et Mario reste à sa position dans le monde
-          cameraOffset.current -= 3;
+          cameraOffset.current -= 2*SCALE;
         } else {
           // Si la caméra ne peut plus reculer, Mario peut bouger à gauche
-          personnage.dx = -3;
+          if (personnage.dx > 0) {
+            // Si on allait à gauche → freinage
+            personnage.dx -= 0.3; // va vers 0
+          }else{
+            personnage.dx -= 0.3;
+           if (personnage.dx < -personnage.Maxspeed) personnage.dx = -personnage.Maxspeed;
+          }
         }
         personnage.frameCounter++;
         if (personnage.frameCounter >= personnage.FRAME_SPEED) {
@@ -284,8 +345,15 @@ const CanvasGame = () => {
   
 
   const draw = (ctx: CanvasRenderingContext2D) => {
+    
+
     const height = ctx.canvas.height;
     const width = ctx.canvas.width;
+    ctx.clearRect(0, 0, width, height);
+    ctx.save();
+  
+    // Applique l’échelle
+ 
     if (backgroundCanvasRef.current) {
       ctx.drawImage(
         backgroundCanvasRef.current, 
@@ -293,8 +361,37 @@ const CanvasGame = () => {
         0, 0, width, height
       );
     }
-    drawPersonne(ctx)
+
+    drawPersonne(ctx);
     drawGomba(ctx);
+    drawIAennemi(ctx);
+
+    ctx.restore(); // Restaure l'état initial du contexte
+};
+
+ const drawIAennemi=(ctx: CanvasRenderingContext2D)=>{
+    const { intelligent } = StateRef.current;
+    const currentEtat = intelligent.etat;
+    // Vérifier si l'état existe dans le JSON
+    const spriteEntry = sprites.current.goomba.frames[currentEtat];
+    if (!spriteEntry) return;
+    let spriteData;
+    if (Array.isArray(spriteEntry)) {
+      // Vérifier que frameIndex est valide
+      if (intelligent.frameIndex < 0 || intelligent.frameIndex >= spriteEntry.length) {
+        intelligent.frameIndex = 0; // Réinitialiser si l'index est hors limites
+      }
+      spriteData = spriteEntry[intelligent.frameIndex];
+    } else {
+      spriteData = spriteEntry;
+    }
+    // Vérifier que spriteData est défini
+    if (!spriteData) return;
+    ctx.drawImage(    
+      intelligent.image,
+      spriteData.pixel[0], spriteData.pixel[1], spriteData.pixel[2], spriteData.pixel[3], 
+      intelligent.x-cameraOffset.current, intelligent.y, intelligent.w, intelligent.h
+    );
   };
 
   const drawGomba=(ctx: CanvasRenderingContext2D)=>{
@@ -330,36 +427,33 @@ const CanvasGame = () => {
   };
 
   const drawBackground = (ctx: CanvasRenderingContext2D) => {
-    worldData.backgrounds.forEach(background => {
-      const tileType = background.tile;
-
-      background.ranges.forEach(range => {
-        const [startX, endX, startY, endY] = range;
-
-          for (let y = startY; y < endY; y++) {
-            for (let x = startX; x < endX; x++) {
+    ctx.imageSmoothingEnabled = true; 
+        for (let y = 0; y < mat.length; y++) { // Parcourt les lignes de la matrice
+          for (let x = 0; x < mat[y].length; x++) { 
             let tileX = 0, tileY = 0;
 
-            if (tileType === "sky") {
+            if (mat[y][x] === "sky") {
               tileX = 3;
               tileY = 23;
 
-            } else if (tileType === "ground") {
+            } else if (mat[y][x] === "ground") {
               tileX = 0;
               tileY = 0;
-            }else if(tileType ==='pipe'){
-              ({ tileX, tileY } = getPipeTile(x, y, startX, startY));
+            }else if(mat[y][x] ==='pipe'){
+              ({ tileX, tileY } = getPipeTile(x, y, 0, 0));
             }
 
             ctx.drawImage(
               tileImage.current,
-              tileX * tileSize, tileY * tileSize, tileSize, tileSize,
+              tileX * BASE_TILE_SIZE, tileY * BASE_TILE_SIZE, BASE_TILE_SIZE, BASE_TILE_SIZE,
               x * tileSize - cameraOffset.current, y * tileSize, tileSize, tileSize
             );
+            
           }
+          
         }
-      });
-    });
+        
+     
   };
 
 
@@ -367,7 +461,7 @@ const CanvasGame = () => {
     tileImage.current.src = Tiles;
     tileImage.current.onload = () => {
       setIsLoaded(true);
-      generateMatrix(); // generer la matrice du monde
+       // generer la matrice du monde
   
       // creer et configurer le canvas de fond
       if (!backgroundCanvasRef.current) {
