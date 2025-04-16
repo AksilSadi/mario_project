@@ -1,5 +1,5 @@
 export const BASE_TILE_SIZE = 16; // taille originale des sprites
-export const SCALE = 1.5; // facteur pour redimensionner les sprites 
+export const SCALE = 2; // facteur pour redimensionner les sprites 
 export const tileSize = BASE_TILE_SIZE * SCALE;
 
 // fonction pour generer dynamiquement le monde en fonction de la hauteur de l'ecran
@@ -19,17 +19,37 @@ export const generateWorldData = () => {
             {
                 tile: "ground",
                 ranges: [
-                    [0, 200, groundStart, groundEnd], // le sol
-                    
-                    
+                  [0, 200, groundStart, groundEnd],
+                  
+                  // Petites collines à gauche
+                  [4, 8, groundStart - 4, groundStart - 2],
+                  [9, 13, groundStart - 2, groundStart],
+                  
+                  // Vallée
+                  [20, 24, groundStart + 2, groundEnd + 2],
+              
+                  // Re-colline à droite
+                  [28, 32, groundStart - 4, groundStart - 2],
+                  [33, 37, groundStart - 2, groundStart],
+              
+                  // Plateau élevé
+                  [45, 50, groundStart - 6, groundStart - 4],
+                  [45, 50, groundStart - 6, groundEnd],
                 ]
-            }
-            /*,{
+              },
+            {
                 tile:'pipe',
                 ranges:[
-                    [66,68,groundStart-2,groundEnd]
+                    [66,68,groundStart-2,groundStart]
                 ]
-            }*/
+            },
+            {
+                tile:'canon',
+                ranges:[
+                    [4,5,groundStart-6,groundStart-4]
+                ]
+            }
+            
         ]
     };
 };

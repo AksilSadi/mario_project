@@ -1,0 +1,387 @@
+****************************new pathfinding***********************
+import { mat } from './world';
+
+export const transformMatrix = (matrix: string[][]) => {
+  const transformedMatrix: number[][] = [];
+
+  for (let i = 0; i < matrix.length; i++) {
+    // On ajoute deux lignes pour chaque ligne originale
+    transformedMatrix[2 * i] = [];
+    transformedMatrix[2 * i + 1] = [];
+
+    for (let j = 0; j < matrix[0].length; j++) {
+      const isSky = matrix[i][j] === "sky" ? 1 : 0;
+
+      // On ajoute deux colonnes pour chaque colonne originale
+      transformedMatrix[2 * i][2 * j] = isSky;
+      transformedMatrix[2 * i][2 * j + 1] = isSky;
+      transformedMatrix[2 * i + 1][2 * j] = isSky;
+      transformedMatrix[2 * i + 1][2 * j + 1] = isSky;
+    }
+  }
+
+  return transformedMatrix;
+};
+
+
+type noeud = {
+    x: number;
+    y: number;
+    g: number;
+    h: number;
+    f: number;
+    parent: noeud | null;
+}
+
+export const heuristic = (a: noeud, b: noeud) => {
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+const getNeighbors = (node: noeud, matrix: number[][]) => {
+    const neighbors: noeud[] = [];
+    const directions = [
+        { dx: 0, dy: -1 },   // haut
+        { dx: 1, dy: 0 },    // droite
+        { dx: 0, dy: 1 },    // bas
+        { dx: -1, dy: 0 },   // gauche
+        { dx: 1, dy: -1 },   // haut-droite
+        { dx: 1, dy: 1 },    // bas-droite
+        { dx: -1, dy: 1 },   // bas-gauche
+        { dx: -1, dy: -1 }   // haut-gauche
+    ];
+
+    for (const dir of directions) {
+        const newX = node.x + dir.dx;
+        const newY = node.y + dir.dy;
+
+        if (
+            newX >= 0 && newX < matrix[0].length &&
+            newY >= 0 && newY < matrix.length &&
+            matrix[newY][newX] === 1
+        ) {
+            neighbors.push({
+                x: newX,
+                y: newY,
+                g: 0,
+                h: 0,
+                f: 0,
+                parent: null
+            });
+        }
+    }
+
+    return neighbors;
+}
+
+const construirePath = (node: noeud | null) => {
+    const path: noeud[] = [];
+    while (node) {
+        path.push(node);
+        node = node.parent;
+    }
+    return path.reverse();
+}
+
+export const astar = (start: noeud, goal: noeud) => {
+    const matrix = transformMatrix(mat);
+    const openSet: noeud[] = [start];
+    const closedSet: noeud[] = [];
+
+    start.g = 0;
+    start.h = heuristic(start, goal);
+    start.f = start.g + start.h;
+
+    while (openSet.length > 0) {
+        let currentNode = openSet.reduce((prev, curr) => (curr.f < prev.f ? curr : prev));
+
+        if (currentNode.x === goal.x && currentNode.y === goal.y) {
+            return construirePath(currentNode);
+        }
+
+        openSet.splice(openSet.indexOf(currentNode), 1);
+        closedSet.push(currentNode);
+
+        const neighbors = getNeighbors(currentNode, matrix);
+
+        for (const neighbor of neighbors) {
+            if (closedSet.some(n => n.x === neighbor.x && n.y === neighbor.y)) {
+                continue;
+            }
+
+            const isDiagonal = neighbor.x !== currentNode.x && neighbor.y !== currentNode.y;
+            const cost = isDiagonal ? Math.SQRT2 : 1;
+            const tentativeG = currentNode.g + cost;
+
+            const existingNode = openSet.find(n => n.x === neighbor.x && n.y === neighbor.y);
+
+            if (!existingNode || tentativeG < existingNode.g) {
+                neighbor.parent = currentNode;
+                neighbor.g = tentativeG;
+                neighbor.h = heuristic(neighbor, goal);
+                neighbor.f = neighbor.g + neighbor.h;
+
+                if (!existingNode) {
+                    openSet.push(neighbor);
+                }
+            }
+        }
+    }
+
+    return []; // aucun chemin trouvé
+};
+
+***************************old pathfinding***********************************
+import { mat } from './world';
+export const transformMatrix = (matrix: string[][]) => {
+    const transformedMatrix: number[][] = [];
+    for (let i = 0; i < matrix.length; i++) {
+        transformedMatrix[i] = [];
+        for (let j = 0; j < matrix[0].length; j++) {
+            if(matrix[i][j] === "sky"){
+                transformedMatrix[i][j] = 1;
+        }else{
+            transformedMatrix[i][j] = 0;
+        }
+    }
+}
+return transformedMatrix;
+}
+type noeud= {
+    x: number;
+    y: number;
+    g: number; // cout du chemin depuis le debut
+    h: number; // heuristique 
+    f: number; // cout total
+    parent: noeud | null; // pour reconstruire le chemin
+}
+export const heuristic = (a: noeud, b: noeud) => {
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    return Math.sqrt(dx * dx + dy * dy); // distance euclidienne
+}
+const getNeighbors = (node: noeud, matrix: number[][]) => {
+    const neighbors: noeud[] = [];
+    const directions = [
+        { dx: 0, dy: -1 },   // haut
+        { dx: 1, dy: 0 },    // droite
+        { dx: 0, dy: 1 },    // bas
+        { dx: -1, dy: 0 },   // gauche
+        { dx: 1, dy: -1 },   // haut-droite
+        { dx: 1, dy: 1 },    // bas-droite
+        { dx: -1, dy: 1 },   // bas-gauche
+        { dx: -1, dy: -1 }   // haut-gauche
+    ];
+    for (const dir of directions) {
+        const newX = node.x + dir.dx;
+        const newY = node.y + dir.dy;
+        if (newX >= 0 && newX < matrix[0].length && newY >= 0 && newY < matrix.length) {
+            if (matrix[newY][newX] === 1) {
+                const isDiagonal = dir.dx !== 0 && dir.dy !== 0;
+                const cost = isDiagonal ? Math.SQRT2 : 1;
+                neighbors.push({
+                    x: newX,
+                    y: newY,
+                    g: node.g + cost,
+                    h: 0,
+                    f: 0,
+                    parent: null
+                });
+            }
+        }
+    }
+    return neighbors;
+}
+
+const construirePath = (node: noeud|null) => {
+    const path: noeud[] = [];
+    while (node) {
+        path.push(node);
+        node = node.parent;
+    }
+    return path.reverse();
+}
+export const astar = (start: noeud, goal: noeud) => {
+    const matrix = transformMatrix(mat);
+    const openSet: noeud[] = [start];
+    const closedSet: noeud[] = [];
+    start.g = 0;
+    start.h = heuristic(start, goal);
+    start.f = start.g + start.h;
+    while (openSet.length > 0) {
+        // trouver le noeud avec le plus bas f
+        let currentNode = openSet.reduce((prev, curr) => (curr.f < prev.f ? curr : prev));
+
+        // si on a atteint l'objectif, on reconstruit le chemin
+        if (currentNode.x === goal.x && currentNode.y === goal.y) {
+            return construirePath(currentNode);
+        }
+
+        // on deplace le noeud actuel de openSet à closedSet
+        openSet.splice(openSet.indexOf(currentNode), 1);
+        closedSet.push(currentNode);
+
+        // on recupere les voisins
+        const neighbors = getNeighbors(currentNode, matrix);
+        
+
+        for (const neighbor of neighbors) {
+            // si le voisin est deja dans closedSet, on passe
+            if (closedSet.some(node => node.x === neighbor.x && node.y === neighbor.y)) {
+                continue;
+            }
+
+            const gScore = currentNode.g + 1;
+
+            // si le voisin n'est pas dans openSet ou si on a trouve un chemin plus court
+            if (!openSet.some(node => node.x === neighbor.x && node.y === neighbor.y) || gScore < neighbor.g) {
+                neighbor.parent = currentNode;
+                neighbor.g = gScore;
+                neighbor.h = heuristic(neighbor, goal);
+                neighbor.f = neighbor.g + neighbor.h;
+
+                // ajouter le voisin a openSet si ce n'est pas deja fait
+                if (!openSet.some(node => node.x === neighbor.x && node.y === neighbor.y)) {
+                    openSet.push(neighbor);
+                }
+            }
+        }
+    }
+
+    return []; // si aucun chemin n'est trouve
+};
+   
+/***************************ancien suivre******************************
+const suivreChemin = (ennemi: IAennemi) => {
+  if (!ennemi.path || ennemi.path.length === 0) return;
+
+  const ProchaineCase = ennemi.path[ennemi.currentTargetIndex];
+  const targetCaseX = ProchaineCase?.x;
+  const targetCaseY = ProchaineCase?.y;
+
+  const caseX = getPosition(ennemi.x);
+  const caseY = getPosition(ennemi.y);
+
+  
+
+  if(targetCaseX < caseX && targetCaseY<caseY){
+    ennemi.dx = Math.max(ennemi.dx - 0.1, -SCALE);
+    ennemi.dy = Math.max(ennemi.dy - 0.1, -SCALE);
+  }else if(targetCaseX > caseX && targetCaseY<caseY){
+    ennemi.dx = Math.min(ennemi.dx + 0.1, SCALE);
+    ennemi.dy = Math.max(ennemi.dy - 0.1, -SCALE);
+  }else if(targetCaseX < caseX && targetCaseY>caseY){
+    ennemi.dx = Math.max(ennemi.dx - 0.1, -SCALE);
+    ennemi.dy = Math.min(ennemi.dy + 0.1, SCALE);
+  }else if(targetCaseX > caseX && targetCaseY>caseY){
+    ennemi.dx = Math.min(ennemi.dx + 0.1, SCALE);
+    ennemi.dy = Math.min(ennemi.dy + 0.1, SCALE);
+  }else if(targetCaseX === caseX && targetCaseY<caseY){
+    ennemi.dy = Math.max(ennemi.dy - 0.1, -SCALE);  // Va vers le haut
+  }else if(targetCaseX === caseX && targetCaseY>caseY){
+    ennemi.dy = Math.min(ennemi.dy + 0.1, SCALE);  // Va vers le bas
+  }else if(targetCaseX<caseX && targetCaseY === caseY){
+    ennemi.dx = Math.max(ennemi.dx - 0.1, -SCALE);  // Accélère vers la gauche
+  }else if(targetCaseX>caseX && targetCaseY === caseY){
+    ennemi.dx = Math.min(ennemi.dx + 0.1, SCALE);  // Accélère vers la droite
+  }
+
+  // Animation de l'ennemi
+  ennemi.frameCounter++;
+  if (ennemi.frameCounter >= ennemi.FRAME_SPEED) {
+    ennemi.frameCounter = 0;
+    ennemi.frameIndex = (ennemi.frameIndex + 1) % 2;
+  }
+
+  // Détection de l'arrivée sur la case cible (tolérance en case)
+  const epsilon = 0; // tolérance
+  if (Math.abs(caseX - targetCaseX) <= epsilon && Math.abs(caseY - targetCaseY) <= epsilon) {
+    if(ennemi.currentTargetIndex >= ennemi.path.length - 1){
+      
+      ennemi.dx=0;
+      ennemi.dy=0;
+    }
+    ennemi.currentTargetIndex++;
+  }
+
+  // Si on a atteint la fin du chemin, recommence
+ 
+  if(CollisionX(ennemi,0,0)){
+    const actualX = (ennemi.x + ennemi.dx );
+    if(ennemi.dx>0 ){
+      ennemi.dx = 0;
+      ennemi.x = ((Math.floor((actualX + ennemi.w) / tileSize) * tileSize) - ennemi.w);
+    } else if(ennemi.dx<0){
+      ennemi.dx = 0;
+      ennemi.x = (Math.ceil(actualX / tileSize) * tileSize);
+  } 
+  };
+  
+  ennemi.x += ennemi.dx;
+  CollisionY(ennemi, 0);
+  ennemi.y += ennemi.dy; 
+};
+
+*********************move ennemi*********************
+ if(ennemi.type!=='Bullet'){
+          if (ennemi.etat === 'ecraser') return;
+        }
+        
+        ennemi.dy += ennemi.gravity; // Appliquer la gravité
+        ennemi.frameCounter++;
+        if (ennemi.frameCounter >= ennemi.FRAME_SPEED) {
+          ennemi.frameCounter = 0;
+          ennemi.frameIndex = (ennemi.frameIndex + 1) % 2; 
+      }
+        if(ennemi.type==='goomba'){
+          if (CollisionX(ennemi, 0, 0)) {
+            ennemi.dx *= -1; // inverser la direction
+            ennemi.direction = ennemi.direction === 'left' ? 'right' : 'left';
+          }
+        }else if(ennemi.type==='Bullet'){
+          if(size){
+            if(ennemi.x<0 || ennemi.x>size?.width || ennemi.y<0 || ennemi.y>size?.height){
+              ennemis = ennemis.filter(e => e !== ennemi);
+              setTimeout(()=>{
+                StateRef.current.ennemis=ennemis;
+              },100);
+            }
+          }
+        }
+        
+    
+        // verifier collisions au sol
+        ennemi.x += ennemi.dx;
+        if(ennemi.type!=='Bullet' && ennemi.type!=='Piranha'){
+          CollisionY(ennemi, camera.x);
+          ennemi.y += ennemi.dy;
+        }else{
+          if(ennemi.etat==='ecraser'){
+            ennemi.y += ennemi.dy;
+          }
+        }
+        if(personnage.etat!=='mort'){
+          if(ennemi.etat!=='ecraser'){
+            if(ecraser(personnage,ennemi,camera.x)){
+              if(ennemi.type!=='Bullet'){
+              ennemi.y += (ennemi.h - 8);
+              ennemi.h = 8;
+              ennemis = ennemis.filter(e => e !== ennemi);//pour supprimer le goombat qui vient de s'ecraser dans notre etat de jeu
+              setTimeout(()=>{
+                StateRef.current.ennemis=ennemis;
+              },500); 
+              }else{
+                ennemi.dx=0
+                ennemi.dy=0;
+                ennemi.y-=ennemi.h/2;
+              }
+              ennemi.etat = 'ecraser';
+              personnage.dy = personnage.forceSaut / 2; // mario rebondit un peu 
+          }
+          }
+        if(collisionGoomba(personnage,ennemi,camera.x)){
+          personnage.etat='mort';
+          personnage.dy=personnage.forceSaut;
+        }
+        }

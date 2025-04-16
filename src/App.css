@@ -5,4 +5,5 @@
 canvas {
   image-rendering: pixelated;
   image-rendering: crisp-edges; /* fallback */
+  background-color: #63adff;
 }

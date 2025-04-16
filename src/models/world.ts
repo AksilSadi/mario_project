@@ -29,7 +29,6 @@ export const generateMatrix = () => {
                         mat[y][x] = tileType;
                     }
                 }
-                console.log(`izan ${y*tileSize} : ${background.tile}`);
             }
         });
     });
@@ -45,7 +44,10 @@ export const getIndex = (x: number, y: number) => {
     }
     return null;
 };
-export const getPosition=(pixel:number)=> Math.floor(pixel / tileSize);
+
+const tileUnit=tileSize / 2;
+
+export const getPosition = (pixel: number) => Math.floor(pixel / tileUnit);
 
 generateMatrix();
 window.addEventListener("resize", generateMatrix);
