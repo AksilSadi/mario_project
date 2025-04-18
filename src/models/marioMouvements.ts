@@ -50,6 +50,21 @@ const jsonData = {
           { "pixel": [144, 181, 16, 22] }
         ]
       }
+      },
+      "buzzyBeetle": {
+        "frames": {
+          "runD": [
+            { "pixel": [295, 315, 16, 16] },
+            { "pixel": [314, 314, 16, 16] }
+          ],
+          "runG": [
+            { "pixel": [200, 315, 16, 16] },
+            { "pixel": [181, 314, 16, 16] }
+          ],
+          "ecraser": { "pixel": [219, 315, 16, 16] },
+          "touchedD":{ "pixel": [219, 315, 16, 16] },
+          "touchedG":{ "pixel": [219, 315, 16, 16] }
+        }
       }
 };
 

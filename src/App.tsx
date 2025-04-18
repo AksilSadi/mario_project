@@ -51,6 +51,7 @@ const CanvasGame = () => {
     y:number;
     direction:'left' | 'right'
     lastShotTime:number;
+    distance:number;//pour savoir si mario est dans la zone de tir
   }
   type Ennemi = {
     x: number;
@@ -62,11 +63,12 @@ const CanvasGame = () => {
     maxVisibilite?: number;//attribut pour piranha
     minVisibilite?: number;//attribut pour piranha
     tempsAttente?: number;//attribut pour piranha 
-    type: 'goomba' | 'Bullet' | 'Piranha';
+    type: 'goomba' | 'Bullet' | 'Piranha' | 'buzzyBeetle';
     gravity: number;
     direction?: 'left' | 'right' | 'Haut' | 'Bas';
-    etat: 'marcher' | 'ecraser' | 'stopD' | 'stopG';
+    etat: 'marcher' | 'ecraser' | 'stopD' | 'stopG' | 'runD' | 'runG' | 'touchedD' | 'touchedG';
     image: HTMLImageElement;
+    lancerCooldown?:number;//pour autoriser le lancer de la carapace
     frameIndex:number;
     frameCounter:number;
     FRAME_SPEED:number;
@@ -128,8 +130,8 @@ const CanvasGame = () => {
     const { height, width } = ctx.canvas;
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, width, height);
-    const img=new Image()
-    const img2=new Image()
+    const img=new Image();
+    const img2=new Image();
     img.src=characters
     img2.src=fantomes
     StateRef.current={
@@ -154,7 +156,8 @@ const CanvasGame = () => {
       endOfGame:false,
       ennemis:[
         { x: 200, y: 100, dx: 1*SCALE, dy: 0, w: 16*SCALE, h: 16*SCALE,type:"goomba", gravity: 0.3*SCALE, direction: 'left', etat: 'marcher',image:img,frameIndex:0,frameCounter:0,FRAME_SPEED:20 },
-        { x: 400, y: 100, dx: 1*SCALE, dy: 0, w: 16*SCALE, h: 16*SCALE,type:"goomba", gravity: 0.3*SCALE, direction: 'right', etat: 'marcher',image:img,frameIndex:0,frameCounter:0,FRAME_SPEED:20 }
+        { x: 400, y: 100, dx: 1*SCALE, dy: 0, w: 16*SCALE, h: 16*SCALE,type:"goomba", gravity: 0.3*SCALE, direction: 'right', etat: 'marcher',image:img,frameIndex:0,frameCounter:0,FRAME_SPEED:20 },
+        { x: 600, y: 100, dx: 1*SCALE, dy: 0, w: 16*SCALE, h: 16*SCALE,type:"buzzyBeetle", gravity: 0.3*SCALE,lancerCooldown:0, direction: 'right', etat: 'marcher',image:img,frameIndex:0,frameCounter:0,FRAME_SPEED:20 }
       ],
       intelligent: { x: 1000, y: (height-(tileSize*2))-5, dx: -1*SCALE, dy: -1*SCALE, w: 16*SCALE, h: 16*SCALE, gravity: 0.3*SCALE,forceSaut: -8*SCALE,sauter: true,etat: 'marcher', direction:'right', path: [],smoothPath:[], currentTargetIndex: 0,image:img2,frameIndex:0,frameCounter:0,FRAME_SPEED:20,lastUpdate:0 },
       camera:{x:0,y:0,dx:0,dy:0},
@@ -248,21 +251,40 @@ const CanvasGame = () => {
           case 'Piranha':
             movePiranha(ennemi,StateRef.current);
             break;
+          case 'buzzyBeetle':
+            updateBuzzyBeetle(ennemi,StateRef.current);
+            break;
           default:
             break;
         }
+        if (ennemi.lancerCooldown && ennemi.lancerCooldown > 0) {
+       ennemi.lancerCooldown--;
+      }
         ennemi.frameCounter++;
         if (ennemi.frameCounter >= ennemi.FRAME_SPEED) {
           ennemi.frameCounter = 0;
           ennemi.frameIndex = (ennemi.frameIndex + 1) % 2; 
       }
+      ennemis.forEach((autreGoomba) => {
+        if (autreGoomba !== ennemi && autreGoomba.type!=='Bullet') {
+          if (collisionGoomba(ennemi, autreGoomba, 0)) {
+            ennemi.dx *= -1; // inverser la direction
+            ennemi.direction = ennemi.direction === 'left' ? 'right' : 'left';
+          }
+        }
+      });
       //pour interdir de rebondir sur les ennemis une fois que mario mort
-      if(personnage.etat!=='mort'){
-        if(collisionGoomba(personnage,ennemi,camera.x)){
-          personnage.etat='mort';
-          personnage.dy=personnage.forceSaut;
+      if (personnage.etat !== 'mort') {
+        if (ennemi.etat !== 'ecraser') {
+          if (collisionGoomba(personnage, ennemi, camera.x)) {
+            if (!ennemi.lancerCooldown || ennemi.lancerCooldown <= 0) {
+              personnage.etat = 'mort';
+              personnage.dy = personnage.forceSaut;
+            }
+          }
         }
       }
+      
       });
     
       // gestion de collision et de gravite
@@ -553,7 +575,8 @@ const CanvasGame = () => {
                   x,
                   y,
                   direction:'left',
-                  lastShotTime: Date.now()
+                  lastShotTime: Date.now(),
+                  distance:1000
                 });
               }
               if (canonStartX === -1 && canonStartY === -1) {
@@ -806,7 +829,7 @@ const suivreChemin = (ennemi: IAennemi) => {
 
 const updateBullet=(etat:Etat)=>{
   for (const canon of etat.Canon) {
-    if(peutTirer(canon)){
+    if(peutTirer(canon,etat.personnage,etat.camera.x,etat.size!.width)){
       canon.lastShotTime=Date.now();
       if(etat.personnage.x-canon.x>0){
         canon.direction='right'
@@ -840,9 +863,18 @@ const tirer=(etat:Etat,X:number,Y:number,Direction:'right' | 'left')=>{
   })
 }
 
-const peutTirer=(canon:canon):boolean=>{
-  const time=Date.now();
-  return time-canon.lastShotTime>2000
+const peutTirer=(canon:canon,mario:Mario,cameraX:number,screenWidth:number):boolean=>{
+  const time = Date.now();
+  const distance = Math.abs(canon.x - mario.x);
+
+  const marge = canon.distance;//une distance suuplimentaire pour que le canon tire
+  const estVisibleOuProche =
+    canon.x > cameraX - marge && canon.x < cameraX + screenWidth + marge;
+  return (
+    time - canon.lastShotTime > 5000 &&
+    
+    estVisibleOuProche
+  ); 
 }
 
 
@@ -873,15 +905,74 @@ const updateGoomba=(ennemi:Ennemi,etat:Etat)=>{
     }
   }
 
+  const updateBuzzyBeetle = (ennemi: Ennemi, etat: Etat) => {
+    let { personnage, camera } = etat;
+  
+    ennemi.dy += ennemi.gravity;
+  
+    // appliquer la vitesse selon l'état
+    if (ennemi.etat === 'touchedD') {
+      ennemi.dx = SCALE * 3;
+    } else if (ennemi.etat === 'touchedG') {
+      ennemi.dx = -SCALE * 3;
+    }
+  
+    // Collision laterale (rebond)
+    if (CollisionX(ennemi, 0, 0)) {
+      ennemi.dx *= -1;
+      ennemi.direction = ennemi.direction === 'left' ? 'right' : 'left';
+  
+      
+      if (ennemi.etat === 'touchedD') {
+        ennemi.etat = 'touchedG';
+      } else if (ennemi.etat === 'touchedG') {
+        ennemi.etat = 'touchedD';
+      }
+    }
+  
+    
+    if (
+      ennemi.etat !== 'ecraser' &&
+      ennemi.etat !== 'touchedD' &&
+      ennemi.etat !== 'touchedG'
+    ) {
+      if (ennemi.dx > 0) {
+        ennemi.etat = 'runD';
+      } else if (ennemi.dx < 0) {
+        ennemi.etat = 'runG';
+      }
+    }
+  
+    
+    ennemi.x += ennemi.dx;
+    CollisionY(ennemi, camera.x);
+    ennemi.y += ennemi.dy;
+  
+    
+    if (personnage.etat !== 'mort') {
+      if (ecraser(personnage, ennemi, camera.x)) {
+        ennemi.dx = 0;
+        ennemi.etat = 'ecraser';
+        personnage.dy = personnage.forceSaut / 2;
+      }
+    }
+  
+    // Lancer la carapace
+    if (ennemi.etat === 'ecraser') {
+      if (collisionGoomba(personnage, ennemi, camera.x)) {
+        ennemi.etat = personnage.dx > 0 ? 'touchedD' : 'touchedG';
+        ennemi.lancerCooldown = 10;
+      }
+    }
+  };
+  
+
 const moveBullet=(ennemi:Ennemi,etat:Etat)=>{
   let { personnage,camera,size,ennemis } = etat;
   ennemi.dy += ennemi.gravity;//cela permet de faire tomber la balle
   if(size){
-    if(ennemi.x<0 || ennemi.x>size?.width || ennemi.y<0 || ennemi.y>size?.height){
-      ennemis = ennemis.filter(e => e !== ennemi);
-      setTimeout(()=>{
-        StateRef.current.ennemis=ennemis;
-      },100);
+    if ( ennemi.y <= 0 || ennemi.y >= size?.height) {
+      StateRef.current.ennemis = StateRef.current.ennemis.filter(e => e !== ennemi);
     }
   }
   ennemi.x += ennemi.dx;
@@ -891,7 +982,7 @@ const moveBullet=(ennemi:Ennemi,etat:Etat)=>{
   if(personnage.etat!=='mort'){
     if(ennemi.etat!=='ecraser'){
       if(ecraser(personnage,ennemi,camera.x)){
-          ennemi.dx=0
+          ennemi.dx=0;
           ennemi.dy=0;
           ennemi.y-=ennemi.h/2;
         
